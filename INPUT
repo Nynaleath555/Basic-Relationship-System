@@ -1,0 +1,13 @@
+const modifier = (text) => {
+
+  REL.init();
+
+  state.relationships.lastInput =
+    String(text || "");
+
+  return {
+    text
+  };
+};
+
+modifier(text);
