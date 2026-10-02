@@ -1,9 +1,14 @@
+/* =========================================================
+   BASIC REL v3 — OUTPUT HOOK
+   VERSION: 3.0
+   HOOK: OUTPUT
+   ========================================================= */
+
 const modifier = (text) => {
 
   if (
     typeof REL === "undefined"
   ) {
-
     return {
       text
     };
@@ -12,10 +17,28 @@ const modifier = (text) => {
   const relationships =
     REL.init();
 
+  if (
+    typeof RELStatus !== "undefined"
+  ) {
+    RELStatus.ensureConfigCard();
+  }
+
   const npcs =
     REL.syncCharacters(
       storyCards
     );
+
+  const manualEdit =
+    REL.applyManualEdit();
+
+  if (
+    manualEdit.applied &&
+    typeof RELStatus !== "undefined"
+  ) {
+    RELStatus.update(
+      manualEdit.name
+    );
+  }
 
   const input =
     relationships.lastInput || "";
@@ -24,26 +47,17 @@ const modifier = (text) => {
     String(text || "");
 
   if (!output) {
-
     return {
       text
     };
   }
 
-  // Reuse the scene state created during CONTEXT.
-  // Do not rescan Story Cards or broad context here.
   const scene = {
-
     activeNames:
       REL.getActiveScene(),
-
-    explicitTarget:
-      ""
+    explicitTarget: ""
   };
 
-  // A named NPC in the current input is an explicit target
-  // when exactly one active NPC matches it.
-  // With multiple active NPCs, ambiguity means no update.
   const explicitTarget =
     REL.resolveExplicitTarget(
       input,
@@ -68,9 +82,7 @@ const modifier = (text) => {
 
     const npc =
       npcs.find(
-        x =>
-          x.name ===
-          name
+        x => x.name === name
       );
 
     if (!npc) {
@@ -87,9 +99,6 @@ const modifier = (text) => {
   if (
     typeof RELStatus !== "undefined"
   ) {
-
-    RELStatus.ensureConfigCard();
-
     RELStatus.updateTrackedStatuses(
       npcs
     );
