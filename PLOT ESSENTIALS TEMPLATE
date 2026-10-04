@@ -1,0 +1,10 @@
+World: {your world settings}
+[${character.name} :
+Complete name: ${What is your character's complete name?}
+Gender: ${What is your character's gender?}
+Age: ${How old is your character?}
+Pronouns: ${What are your character's pronouns?}
+Personality: ${Describe your character's personality.}
+Physical description: ${Describe your character's appearance.}
+Backstory: ${What is your backstory? Your current life situation, example: your family, your occupation...}
+${character.name} is player's character]
