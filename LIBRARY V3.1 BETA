@@ -6,7 +6,7 @@
 
 const REL = {
 
-  VERSION: "3.0",
+  VERSION: "3.1",
 
   genders: {
     man: ["man", "male", "boy"],
