@@ -2588,6 +2588,429 @@ const REL = {
 
     return "Soulmates";
   },
+  // =========================================================
+  // COMBINATION-BASED RELATIONSHIP SIGNALS 3.1 PATCH
+  // =========================================================
+
+  detectCombinedInteraction: function (
+    input,
+    output
+  ) {
+    const inText =
+      String(input || "").toLowerCase();
+
+    const outText =
+      String(output || "").toLowerCase();
+
+    const hasAny = (
+      text,
+      patterns
+    ) =>
+      patterns.some(
+        pattern => pattern.test(text)
+      );
+
+    // =====================================================
+    // PLAYER FRIENDSHIP ACTIONS
+    // =====================================================
+
+    const playerSupportAction =
+      hasAny(
+        inText,
+        [
+          /\b(?:listen(?:s|ed|ing)?|comfort(?:s|ed|ing)?|support(?:s|ed|ing)?|reassur(?:e|es|ed|ing)|encourag(?:e|es|ed|ing)|consol(?:e|es|ed|ing)|help(?:s|ed|ing)?)\b/,
+
+          /\b(?:i'm here for you|i am here for you|you can talk to me|you can tell me anything|i've got your back|i have your back)\b/,
+
+          /\b(?:ask|asks|asked|asking)\b.{0,45}\b(?:okay|alright|feeling|wrong|happened|problem|trouble|worry|worried)\b/
+        ]
+      );
+
+    const playerSocialAction =
+      hasAny(
+        inText,
+        [
+          /\b(?:joke|jokes|joked|laugh|laughs|laughed|chat|chats|chatted|talk|talks|talked|banter|hang out|spend time|walk together|invite|invites|invited|offer|offers|offered|share|shares|shared|tell a story|ask about)\b/,
+
+          /\b(?:coffee|tea|lunch|dinner|movie|game|walk)\b.{0,35}\b(?:together|with you|with me|with us)\b/,
+
+          /\b(?:thank you for|thanks for|i appreciate|i'm glad we|i am glad we)\b/
+        ]
+      );
+
+    const playerTrustAction =
+      hasAny(
+        inText,
+        [
+          /\b(?:ask|asks|asked|asking)\b.{0,60}\b(?:feelings|past|family|secret|fear|fears|worry|worries|problem|dream|hope|childhood|experience)\b/,
+
+          /\b(?:share|shares|shared|sharing|confide|confides|confided|confiding|open up|opened up|opening up|tell|tells|told|telling)\b.{0,65}\b(?:secret|fear|fears|worry|worries|problem|past|childhood|feelings|personal story|truth|experience)\b/,
+
+          /\b(?:you can trust me|i trust you|i won't judge you|i will not judge you|it's okay to talk|it is okay to talk)\b/
+        ]
+      );
+
+    // =====================================================
+    // SHARED INTERESTS
+    // =====================================================
+
+    const playerSharedInterest =
+      hasAny(
+        inText,
+        [
+          /\b(?:i (?:also )?(?:like|love|enjoy)|i'm also into|i am also into|we both (?:like|love|enjoy)|we have that in common|we share (?:an interest|a hobby)|same here|me too)\b/,
+
+          /\b(?:talk|talked|talking|discuss|discussed|discussing|chat|chatted|chatting)\b.{0,55}\b(?:music|books|movies|films|games|gaming|art|sports|cooking|travel|photography|reading|hiking|history|anime|fashion|science|animals|hobby|hobbies|interest|interests)\b/
+        ]
+      );
+
+    // =====================================================
+    // NPC DEEP TRUST RESPONSES
+    // =====================================================
+
+    const npcDeepTrustResponse =
+      hasAny(
+        outText,
+        [
+          /\bopens up to you\b/,
+
+          /\bconfides in you\b/,
+
+          /\bshares (?:a secret|something personal|something deeply personal|their fears|her fears|his fears|their past|her past|his past) with you\b/,
+
+          /\btrusts you with (?:a secret|something personal|their feelings|her feelings|his feelings)\b/,
+
+          /\b(?:lets|allows) (?:you|herself|himself|themselves) (?:in|to see a vulnerable side)\b/,
+
+          /\bfeels safe enough to tell you\b/,
+
+          /\b(?:i've never told anyone|i have never told anyone|i trust you|i was afraid to tell anyone|thank you for listening|thank you for being here)\b/,
+
+          /\b(?:admits|reveals|tells you about|shares with you)\b.{0,60}\b(?:secret|fear|worry|past|childhood|trauma|personal struggle|painful memory)\b/
+        ]
+      );
+
+    // =====================================================
+    // NPC SUPPORT RESPONSES
+    // =====================================================
+
+    const npcSupportResponse =
+      hasAny(
+        outText,
+        [
+          /\bthanks you for (?:listening|helping|being there|your support)\b/,
+
+          /\bappreciates your (?:support|help|understanding|patience|honesty)\b/,
+
+          /\b(?:accepts|welcomes) your (?:help|support|comfort|advice)\b/,
+
+          /\bfeels understood by you\b/,
+
+          /\bfeels heard by you\b/,
+
+          /\b(?:that means a lot|i needed to hear that|i'm glad i can talk to you|i am glad i can talk to you|you helped me)\b/,
+
+          /\brelaxes after you reassure (?:her|him|them)\b/,
+
+          /\blooks relieved after talking to you\b/
+        ]
+      );
+
+    // =====================================================
+    // NPC MEANINGFUL RESPONSES
+    // =====================================================
+
+    const npcMeaningfulResponse =
+      hasAny(
+        outText,
+        [
+          /\bhas a meaningful conversation with you\b/,
+
+          /\bshares something important with you\b/,
+
+          /\basks you a thoughtful question\b/,
+
+          /\basks follow-up questions about what you said\b/,
+
+          /\bshows genuine interest in what you said\b/,
+
+          /\bcontinues the conversation thoughtfully\b/,
+
+          /\bresponds thoughtfully to you\b/,
+
+          /\brelates to what you shared\b/,
+
+          /\bunderstands where you're coming from\b/,
+
+          /\bthanks you sincerely\b/
+        ]
+      );
+
+    // =====================================================
+    // NPC SOCIAL RESPONSES
+    // =====================================================
+
+    const npcSocialResponse =
+      hasAny(
+        outText,
+        [
+          /\blaughs with you\b/,
+
+          /\blaughs at your joke\b/,
+
+          /\bjoins in your laughter\b/,
+
+          /\bplays along with your joke\b/,
+
+          /\bteases you playfully\b/,
+
+          /\bjokes back with you\b/,
+
+          /\baccepts your invitation\b/,
+
+          /\bagrees to join you\b/,
+
+          /\benjoys spending time with you\b/,
+
+          /\benjoys your company\b/,
+
+          /\bkeeps the conversation going\b/,
+
+          /\basks you questions in return\b/,
+
+          /\bresponds enthusiastically\b/,
+
+          /\bsays (?:that sounds fun|she'd love to|he'd love to|they'd love to)\b/,
+
+          /\bshares a story of (?:her|his|their) own\b/
+        ]
+      );
+
+    // =====================================================
+    // NPC SHARED-INTEREST RESPONSES
+    // =====================================================
+
+    const npcSharedInterestResponse =
+      hasAny(
+        outText,
+        [
+          /\blights up when you mention\b/,
+
+          /\bbrightens when you mention\b/,
+
+          /\bgets excited discussing\b/,
+
+          /\btalks enthusiastically about\b/,
+
+          /\bdiscusses .* with enthusiasm\b/,
+
+          /\bshares (?:their|his|her) enthusiasm for\b/,
+
+          /\basks you more about (?:your|the) interest\b/,
+
+          /\bsays (?:they|he|she) (?:also )?(?:like|likes|love|loves|enjoy|enjoys) it too\b/,
+
+          /\bdiscovers you both (?:like|love|enjoy)\b/,
+
+          /\brealizes you have something in common\b/,
+
+          /\bfinds common ground with you\b/
+        ]
+      );
+
+    // =====================================================
+    // PLAYER ROMANTIC INITIATION
+    // =====================================================
+
+    const playerFlirt =
+      hasAny(
+        inText,
+        [
+          /\bflirt(?:s|ed|ing|atiously)?\b/,
+
+          /\bhit on (?:you|her|him|them)\b/,
+
+          /\bmake a pass at\b/,
+
+          /\bmake a move on\b/,
+
+          /\bcompliment(?:s|ed|ing)?\b.{0,55}\b(?:beautiful|handsome|attractive|gorgeous|pretty|charming|sexy)\b/,
+
+          /\b(?:tell|tells|told|telling)\b.{0,45}\b(?:you're|you are)\b.{0,25}\b(?:beautiful|handsome|attractive|gorgeous|pretty|charming|sexy)\b/
+        ]
+      );
+
+    const playerStrongRomanticAction =
+      hasAny(
+        inText,
+        [
+          /\bkiss(?:es|ed|ing)?\b/,
+
+          /\b(?:ask|asks|asked|asking)\b.{0,45}\b(?:out|on a date|to be my partner|to be my girlfriend|to be my boyfriend)\b/,
+
+          /\b(?:confess|confesses|confessed|confessing|admit|admits|admitted|admitting)\b.{0,55}\b(?:love|feelings|crush|attraction)\b/,
+
+          /\b(?:i love you|i'm in love with you|i am in love with you|i have feelings for you|i want to be with you)\b/,
+
+          /\bask(?:s|ed|ing)?\b.{0,35}\b(?:can i kiss you|may i kiss you)\b/
+        ]
+      );
+
+    const romanticInitiation =
+      playerFlirt ||
+      playerStrongRomanticAction;
+
+    // =====================================================
+    // NPC ROMANTIC RECIPROCITY
+    // =====================================================
+
+    const npcStrongRomanticResponse =
+      hasAny(
+        outText,
+        [
+          /\bkisses you back\b/,
+
+          /\breturns your kiss\b/,
+
+          /\breturns the kiss\b/,
+
+          /\baccepts your kiss\b/,
+
+          /\bkisses you\b/,
+
+          /\b(?:says|tells you|admits|confesses)\b.{0,65}\b(?:i love you too|feels the same way|has feelings for you|is attracted to you|wants to be with you|has a crush on you)\b/,
+
+          /\b(?:i love you too|i feel the same way|i have feelings for you too|i want to be with you too)\b/,
+
+          /\b(?:accepts|agrees to) (?:your invitation|go on a date|date you|go out with you)\b/,
+
+          /\breciprocates your romantic feelings\b/,
+
+          /\bconfesses (?:their|her|his) feelings for you\b/
+        ]
+      );
+
+    const npcFlirtResponse =
+      hasAny(
+        outText,
+        [
+          /\bflirts back\b/,
+
+          /\bflirts with you\b/,
+
+          /\bresponds with a flirtatious (?:remark|comment|smile)\b/,
+
+          /\bteases you flirtatiously\b/,
+
+          /\breturns your flirtation\b/,
+
+          /\breturns your compliment with a flirtatious\b/,
+
+          /\bmakes a flirtatious remark\b/,
+
+          /\bopenly flirts with you\b/
+        ]
+      );
+
+    // =====================================================
+    // ROMANTIC REJECTION
+    // =====================================================
+
+    const npcRomanticRejection =
+      hasAny(
+        outText,
+        [
+          /\brejects your (?:romantic )?advance\b/,
+
+          /\bturns you down\b/,
+
+          /\brefuses your kiss\b/,
+
+          /\bpulls away from (?:the kiss|your kiss|your romantic advance)\b/,
+
+          /\bdoes not reciprocate your feelings\b/,
+
+          /\bdoesn't reciprocate your feelings\b/,
+
+          /\bdoes not feel the same way\b/,
+
+          /\bdoesn't feel the same way\b/,
+
+          /\bonly sees you as a friend\b/,
+
+          /\basks you to stop flirting\b/,
+
+          /\btells you to stop flirting\b/,
+
+          /\b(?:i'm not interested in you romantically|i am not interested in you romantically|i only see you as a friend|i don't feel that way|i do not feel that way)\b/
+        ]
+      );
+
+    const romanticRejection =
+      romanticInitiation &&
+      npcRomanticRejection;
+
+    // =====================================================
+    // COMBINATION SCORING SIGNALS
+    // =====================================================
+
+    const friendshipStrongPositive =
+      !romanticRejection &&
+      (playerSupportAction || playerTrustAction) &&
+      npcDeepTrustResponse;
+
+    const friendshipMeaningful =
+      !friendshipStrongPositive &&
+      !romanticRejection &&
+      (
+        (playerSupportAction && npcSupportResponse) ||
+        (playerTrustAction &&
+          (npcMeaningfulResponse || npcSupportResponse)) ||
+        (playerSocialAction && npcMeaningfulResponse)
+      );
+
+    const friendshipSocial =
+      !friendshipStrongPositive &&
+      !friendshipMeaningful &&
+      !romanticRejection &&
+      playerSocialAction &&
+      npcSocialResponse;
+
+    const friendshipSharedInterest =
+      !romanticRejection &&
+      playerSharedInterest &&
+      npcSharedInterestResponse;
+
+    return {
+      friendshipStrongPositive:
+        friendshipStrongPositive,
+
+      friendshipMeaningful:
+        friendshipMeaningful,
+
+      friendshipSocial:
+        friendshipSocial,
+
+      friendshipSharedInterest:
+        friendshipSharedInterest,
+
+      playerFlirt:
+        playerFlirt,
+
+      romancePositive:
+        !romanticRejection &&
+        playerStrongRomanticAction &&
+        npcStrongRomanticResponse,
+
+      romanceSoftPositive:
+        !romanticRejection &&
+        playerFlirt &&
+        npcFlirtResponse,
+
+      romanceNegative:
+        romanticRejection
+    };
+  },
 
   analyzeInteraction: function (
     input,
@@ -3326,21 +3749,100 @@ const REL = {
       return;
     }
 
+    // =========================================================
+    // COMBINED SIGNAL INTEGRATION 3.1 PATCH
+    // =========================================================
+
+    // Preserve existing negative signals while replacing
+    // all legacy positive signals with combination-based ones.
+
     const signals =
       this.analyzeInteraction(
         input,
         output
       );
 
-    let friendshipChange =
-      this.getFriendshipDelta(
-        signals
+    const combinedSignals =
+      this.detectCombinedInteraction(
+        input,
+        output
       );
+
+    // Friendship gains require both player action and NPC response.
+
+    signals.friendshipStrongPositive =
+      combinedSignals.friendshipStrongPositive;
+
+    signals.friendshipMeaningful =
+      combinedSignals.friendshipMeaningful;
+
+    signals.friendshipSocial =
+      combinedSignals.friendshipSocial;
+
+    signals.friendshipSharedInterest =
+      combinedSignals.friendshipSharedInterest;
+
+    // Disable independent legacy signals that can cause false positives.
+
+    signals.friendshipInterest =
+      false;
+
+    signals.friendshipGeneralPositive =
+      false;
+
+    // Romance gains require romantic initiation and reciprocity.
+
+    signals.playerFlirt =
+      combinedSignals.playerFlirt;
+
+    signals.romancePositive =
+      combinedSignals.romancePositive;
+
+    signals.romanceSoftPositive =
+      combinedSignals.romanceSoftPositive;
+
+    signals.romanceNegative =
+      combinedSignals.romanceNegative;
+
+    // Preserve the existing character preference system.
+    // Positive preference bonuses also require a matching interaction.
 
     const preferenceEffect =
       this.getPreferenceEffect(
         npc,
         input
+      );
+
+    if (
+      preferenceEffect.bonus > 0
+    ) {
+      const strongerFriendshipSignal =
+        combinedSignals.friendshipStrongPositive ||
+        combinedSignals.friendshipMeaningful ||
+        combinedSignals.friendshipSocial;
+
+      if (
+        !combinedSignals.friendshipSharedInterest ||
+        strongerFriendshipSignal
+      ) {
+        // Do not award an isolated preference bonus or double-count
+        // a stronger friendship interaction.
+        preferenceEffect.bonus =
+          0;
+
+      } else {
+        // Use the preference bonus instead of adding a second
+        // friendship increase for the same shared-interest interaction.
+        signals.friendshipSharedInterest =
+          false;
+      }
+    }
+
+    // Calculate friendship after applying all combination rules.
+
+    let friendshipChange =
+      this.getFriendshipDelta(
+        signals
       );
 
     friendshipChange +=
