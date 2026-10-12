@@ -1,6 +1,7 @@
 /* ============================================================
-   BASIC REL v3
-   VERSION: 3.0
+   BASIC REL 
+   CREATOR: Nynaleath (Nynaleath1802158 on AID)
+   VERSION: 3.1 BETA
    ============================================================ */
 
 const REL = {
@@ -9,7 +10,7 @@ const REL = {
 
   genders: {
     man: ["man", "male", "boy"],
-    woman: ["woman", "female", "girl"],
+    woman: ["woman", "female", "girl"], 
     "non-binary": [
       "non-binary",
       "nonbinary",
