@@ -4,6 +4,8 @@
    Creator: @Nynaleath
    ===================================================================== */
 
+// BASIC REL DETECTORS //
+
 const relPatchSpeculativePattern = /\b(?:almost|nearly|considers?|considered|thinks?\s+about|thought\s+about|tries?\s+to|tried\s+to|attempts?\s+to|attempted\s+to|plans?\s+to|planned\s+to|intends?\s+to|intended\s+to|wants?\s+to|wanted\s+to|hopes?\s+to|hoped\s+to|would\s+(?:like|love)\s+to|might|may|could|imagines?|imagined|wonders?\s+(?:if|whether)|if\s+(?:they|he|she|you|i))\s*$/i;
 const relPatchNegationPattern = /(?:\b(?:not|never|nor|without|hardly|barely)|n['’]t)\s+(?:\w+\s+){0,2}$/i;
 const relPatchRetrospectivePattern = /\b(?:yesterday|last\s+(?:night|day|week|month|year)|earlier|previously|in\s+the\s+past|used\s+to|once\s+before|remember(?:s|ed)?|recall(?:s|ed)?|recalled|back\s+then|years?\s+ago)\b/i;
@@ -655,8 +657,7 @@ const REL_PATCH_INFIDELITY = {
 
 
 /* ============================================================
-   BASIC REL v3
-   VERSION: 3.0
+   BASIC REL BASE ENGINE
    ============================================================ */
 
 const REL = {
