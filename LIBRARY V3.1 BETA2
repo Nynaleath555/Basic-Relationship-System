@@ -1,3 +1,660 @@
+/* =====================================================================
+   BASIC REL v3 — LIBRARY HOOK
+   Patch: Combination-based Friendship / Romance detectors
+   Hook: Library
+   Creator: @Nynaleath
+   ===================================================================== */
+
+const relPatchSpeculativePattern = /\b(?:almost|nearly|considers?|considered|thinks?\s+about|thought\s+about|tries?\s+to|tried\s+to|attempts?\s+to|attempted\s+to|plans?\s+to|planned\s+to|intends?\s+to|intended\s+to|wants?\s+to|wanted\s+to|hopes?\s+to|hoped\s+to|would\s+(?:like|love)\s+to|might|may|could|imagines?|imagined|wonders?\s+(?:if|whether)|if\s+(?:they|he|she|you|i))\s*$/i;
+const relPatchNegationPattern = /(?:\b(?:not|never|nor|without|hardly|barely)|n['’]t)\s+(?:\w+\s+){0,2}$/i;
+const relPatchRetrospectivePattern = /\b(?:yesterday|last\s+(?:night|day|week|month|year)|earlier|previously|in\s+the\s+past|used\s+to|once\s+before|remember(?:s|ed)?|recall(?:s|ed)?|recalled|back\s+then|years?\s+ago)\b/i;
+
+function relPatchSentenceBounds(str, idx, len) {
+  let start = 0;
+  for (let i = idx - 1; i >= 0; i--) {
+    const ch = str[i];
+    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") { start = i + 1; break; }
+  }
+  let end = str.length;
+  for (let j = idx + len; j < str.length; j++) {
+    const ch = str[j];
+    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") { end = j; break; }
+  }
+  return { start: start, end: end };
+}
+function relPatchIsValidMatch(str, idx, len, options) {
+  const bounds = relPatchSentenceBounds(str, idx, len);
+  const prefix = str.slice(bounds.start, idx);
+  const sentence = str.slice(bounds.start, bounds.end);
+  if (!options.skipSpeculative && relPatchSpeculativePattern.test(prefix)) return false;
+  if (!options.skipNegation && relPatchNegationPattern.test(prefix)) return false;
+  if (relPatchRetrospectivePattern.test(sentence)) return false;
+  return true;
+}
+function relPatchFindMatch(text, patterns, options) {
+  if (!text || !patterns) return false;
+  const opts = options || {};
+  const str = String(text);
+  for (let p = 0; p < patterns.length; p++) {
+    const pattern = patterns[p];
+    if (!pattern.test(str)) continue;
+    const globalPattern = new RegExp(pattern.source, "gi");
+    let m;
+    while ((m = globalPattern.exec(str)) !== null) {
+      if (m[0].length === 0) { globalPattern.lastIndex++; continue; }
+      if (relPatchIsValidMatch(str, m.index, m[0].length, opts)) return true;
+    }
+  }
+  return false;
+}
+function relPatchDetect(text, spec, options) {
+  if (!text || !spec) return false;
+  if (spec.strong && relPatchFindMatch(text, spec.strong, options)) return true;
+  const minGroups = spec.min || 2;
+  let hits = 0;
+  for (const key in spec.groups) {
+    if (relPatchFindMatch(text, spec.groups[key], options)) {
+      hits++;
+      if (hits >= minGroups) return true;
+    }
+  }
+  return false;
+}
+function relPatchReciprocity(inText, outText, pairs) {
+  if (!inText || !outText || !pairs) return false;
+  for (const key in pairs) {
+    const pair = pairs[key];
+    if (relPatchFindMatch(inText, pair.input, { skipSpeculative: true }) &&
+        relPatchFindMatch(outText, pair.output, {})) return true;
+  }
+  return false;
+}
+
+const REL_PATCH_ROMANTIC_INPUT = {
+  kiss: [/\b(?:kiss|kisses|kissed|kissing|make\s+out|making\s+out)\b/i],
+  flirt: [/\b(?:flirt|flirts|flirted|flirting|flirty|seduce|seduces|seduced|seductive|seductively|hit\s+on|hits\s+on|make\s+a\s+pass\s+at|make\s+a\s+move\s+on)\b/i, /\b(?:romantic|romantically)\b/i, /\btease(?:s|d)?\s+(?:him|her|them)\s+(?:flirtatiously|seductively)\b/i],
+  date: [/\b(?:date|dating|go\s+out\s+with\s+me|take\s+(?:him|her|them|you)\s+out|romantic\s+outing|dinner\s+date)\b/i, /\bask(?:s|ed|ing)?\s+(?:him|her|them|you)?\s*(?:out|on\s+a\s+date|for\s+a\s+date)\b/i],
+  touch: [/\b(?:caress(?:es|ed|ing)?|stroke(?:s|d)?|stroking|cuddle(?:s|d|ing)?|snuggle(?:s|d|ing)?|hold(?:s|ing)?\s+(?:her|his|their|your)\s+hand|held\s+(?:her|his|their|your)\s+hand|hold\s+hands|lace(?:s|d)?\s+(?:my|your|our)\s+fingers|intertwine(?:s|d)?\s+(?:my|your|our)\s+fingers|pull(?:s|ed|ing)?\s+(?:her|him|them|you)\s+closer|brush(?:es|ed|ing)?\s+(?:her|his|their)\s+hair|cup(?:s|ped|ping)?\s+(?:her|his|their)\s+(?:cheek|face))\b/i],
+  gift: [/\b(?:romantic\s+gift|romantic\s+present|love\s+letter|love\s+note|roses?|bouquet|jewelry|necklace|bracelet|valentine(?:'s)?\s+gift)\b/i],
+  words: [/\b(?:i\s+love\s+you|i\s+adore\s+you|my\s+feelings\s+for\s+you|confess(?:\s+my)?\s+feelings|romantic\s+feelings|want\s+to\s+be\s+with\s+you|i\s+want\s+(?:this|that)\s+with\s+you|i\s+choose\s+you|i\s+want\s+us|tell\s+(?:him|her|them)\s+(?:that\s+)?i\s+(?:love|adore)\s+(?:him|her|them))\b/i],
+  time: [/\b(?:romantic\s+evening|spend\s+time\s+alone|spend\s+the\s+evening\s+alone|just\s+the\s+two\s+of\s+us|one[-\s]on[-\s]one|private\s+evening|alone\s+together)\b/i]
+};
+function relPatchPlayerRomanticAdvance(inText) {
+  if (!inText) return false;
+  for (const key in REL_PATCH_ROMANTIC_INPUT) {
+    if (relPatchFindMatch(inText, REL_PATCH_ROMANTIC_INPUT[key], { skipSpeculative: true })) return true;
+  }
+  return false;
+}
+
+const REL_PATCH_FRIENDLY_INPUT = {
+  help: [/\b(?:offer(?:s|ed)?\s+(?:to\s+)?(?:help|assist|carry|share)|help(?:s|ed|ing)?\s+(?:him|her|them|out)|assist(?:s|ed|ing)?\s+(?:him|her|them)|protect(?:s|ed|ing)?\s+(?:him|her|them)|save(?:s|d)?\s+(?:him|her|them))\b/i],
+  comfort: [/\b(?:comfort(?:s|ed|ing)?|reassure(?:s|d)?|console(?:s|d)?|cheer(?:s|ed)?\s+(?:him|her|them)\s+up|listen(?:s|ed|ing)?\s+to\s+(?:him|her|them)|hug(?:s|ged|ging)?)\b/i],
+  thanks: [/\b(?:thank(?:s|ed|ing)?|compliment(?:s|ed|ing)?|prais(?:e|es|ed|ing))\b/i],
+  gift: [/\b(?:give|gives|gave|offer|offers|offered|hand|hands|handed)\s+(?:him|her|them)\s+(?:a\s+|some\s+)?(?:gift|present|food|drink|bread|meal|tea|coffee|water)\b/i],
+  apology: [/\b(?:apologi[sz]e(?:s|d)?|i['’]?m\s+sorry|i\s+am\s+sorry)\b/i],
+  invite: [/\b(?:invite(?:s|d)?\s+(?:him|her|them)\s+to|join\s+me|sit\s+with\s+me|share\s+(?:my|a)\s+(?:meal|food|drink|tea|coffee))\b/i]
+};
+const REL_PATCH_FRIENDLY_REPLY = [
+  /\baccepts?\s+(?:your\s+)?(?:help|offer|gift|invitation|apology|comfort|thanks)\b/i,
+  /\bthanks?\s+you\b/i,
+  /\bsmiles?\s+(?:gratefully|warmly|appreciatively|gently)\b/i,
+  /\bnods?\s+(?:gratefully|appreciatively|in\s+thanks)\b/i,
+  /\bforgives?\s+you\b/i,
+  /\blets?\s+out\s+a\s+(?:relieved|grateful)\s+(?:breath|sigh|laugh)\b/i,
+  /\b(?:their|his|her)\s+eyes\s+soften\b/i,
+  /\bhugs?\s+you\s+back\b/i,
+  /\breturns?\s+(?:your\s+)?hug\b/i,
+  /\bleans?\s+into\s+(?:the\s+)?(?:hug|comfort)\b/i,
+  /\btakes?\s+(?:the|your)\s+(?:gift|offer|food|drink)\s+(?:gratefully|with\s+thanks)\b/i
+];
+const REL_PATCH_FRIENDSHIP_RECIPROCAL = {
+  help: { input: REL_PATCH_FRIENDLY_INPUT.help, output: REL_PATCH_FRIENDLY_REPLY },
+  comfort: { input: REL_PATCH_FRIENDLY_INPUT.comfort, output: REL_PATCH_FRIENDLY_REPLY },
+  thanks: { input: REL_PATCH_FRIENDLY_INPUT.thanks, output: REL_PATCH_FRIENDLY_REPLY },
+  gift: { input: REL_PATCH_FRIENDLY_INPUT.gift, output: REL_PATCH_FRIENDLY_REPLY },
+  apology: { input: REL_PATCH_FRIENDLY_INPUT.apology, output: REL_PATCH_FRIENDLY_REPLY },
+  invite: { input: REL_PATCH_FRIENDLY_INPUT.invite, output: REL_PATCH_FRIENDLY_REPLY }
+};
+
+const REL_PATCH_FRIENDSHIP_POSITIVE = {
+  min: 2,
+  strong: [
+    /\bcalls?\s+you\s+(?:(?:their|his|her)\s+)?(?:best\s+friend|close\s+friend|dear\s+friend|true\s+friend)\b/i,
+    /\bconsiders?\s+you\s+(?:a\s+)?(?:friend|close\s+friend|best\s+friend|family)\b/i,
+    /\bsees?\s+you\s+as\s+(?:a\s+)?(?:friend|family|brother|sister)\b/i,
+    /\b(?:vows?|promises?)\s+to\s+(?:protect|stand\s+by|help|look\s+out\s+for)\s+you\b/i,
+    /\brisks?\s+(?:their|his|her)\s+(?:life|safety)\s+(?:for|to\s+protect|to\s+save)\s+you\b/i,
+    /\bsaves?\s+your\s+life\b/i
+  ],
+  groups: {
+    kindWords: [
+      /\b(?:thanks\s+you|thanked\s+you|thanking\s+you|says?\s+thank\s+you)\b/i,
+      /\bexpresses?\s+(?:their|his|her)\s+(?:gratitude|thanks)\b/i,
+      /\bappreciates?\s+(?:you|your\s+(?:help|honesty|company|support|words|kindness))\b/i,
+      /\bis\s+(?:grateful|thankful)\s+(?:to\s+you|for\s+(?:you|your))\b/i,
+      /\b(?:compliments?|praises?)\s+you\b/i,
+      /\bsays?\s+you(?:['’]re|\s+are)\s+(?:a\s+)?(?:good|great|true|real|kind)\s+(?:friend|person|man|woman|ally)\b/i,
+      /\bcalls?\s+you\s+(?:a\s+)?(?:friend|good\s+friend)\b/i
+    ],
+    warmth: [
+      /\bsmiles?\s+(?:warmly|kindly|genuinely|fondly)\s+(?:at|to)\s+you\b/i,
+      /\b(?:smiles?|grins?)\s+at\s+you\s+(?:warmly|kindly|genuinely)\b/i,
+      /\b(?:responds?|answers?|replies)\s+(?:to\s+you\s+)?(?:warmly|kindly|openly|genuinely)\b/i,
+      /\b(?:warm|friendly|kind|genuine|open)\s+(?:smile|expression|tone|gaze)\s+(?:toward|towards|at|for)\s+you\b/i,
+      /\blooks?\s+at\s+you\s+(?:warmly|kindly|with\s+(?:warmth|kindness|respect|appreciation))\b/i,
+      /\bsoftens?\s+(?:toward|towards|around)\s+you\b/i,
+      /\brelaxes?\s+(?:around|in\s+front\s+of|beside|with)\s+you\b/i,
+      /\bis\s+(?:kind|friendly|pleasant)\s+(?:to|toward|towards|with)\s+you\b/i
+    ],
+    companionship: [
+      /\bkeeps?\s+you\s+company\b/i,
+      /\b(?:sits?|stands?|walks?)\s+(?:beside|next\s+to|with|alongside)\s+you\b/i,
+      /\binvites?\s+you\s+to\s+(?:join|sit|eat|come|stay|share|walk)\b/i,
+      /\boffers?\s+(?:to\s+share|you\s+(?:a\s+seat|a\s+drink|some\s+food|a\s+meal|tea|coffee))\b/i,
+      /\bshares?\s+(?:a\s+)?(?:meal|drink|story|stories|food|tea|coffee)\s+with\s+you\b/i,
+      /\b(?:talks?|chats?)\s+with\s+you\s+(?:for\s+(?:a\s+while|hours)|late\s+into|easily|freely|comfortably)\b/i,
+      /\b(?:keeps?|continues?)\s+(?:chatting|talking)\s+with\s+you\b/i,
+      /\benjoys?\s+(?:your\s+company|talking\s+with\s+you|spending\s+time\s+with\s+you)\b/i,
+      /\bagrees?\s+to\s+(?:help|join|accompany|travel\s+with|work\s+with)\s+you\b/i,
+      /\bwants?\s+to\s+(?:hear|know)\s+more\s+about\s+you\b/i,
+      /\basks?\s+(?:you\s+)?about\s+your\s+(?:day|life|past|family|dreams|plans|interests)\b/i,
+      /\blistens?\s+(?:attentively|carefully|closely|patiently|intently)\b/i
+    ],
+    sharedJoy: [
+      /\blaughs?\s+(?:with|along\s+with)\s+you\b/i,
+      /\bshares?\s+(?:a\s+)?(?:laugh|joke|smile)\s+with\s+you\b/i,
+      /\bchuckles?\s+(?:warmly|softly|along)\b/i,
+      /\bbursts?\s+out\s+laughing\s+with\s+you\b/i,
+      /\blaughs?\s+at\s+your\s+joke\b/i,
+      /\b(?:both|the\s+two)\s+of\s+you\s+(?:laugh|share\s+a\s+laugh)\b/i,
+      /\bgrins?\s+(?:back|along)\b/i
+    ],
+    support: [
+      /\b(?:comforts?|reassures?|encourages?|defends?)\s+you\b/i,
+      /\boffers?\s+(?:you\s+)?(?:comfort|support|help|assistance|advice|encouragement)\b/i,
+      /\bcheers?\s+you\s+(?:up|on)\b/i,
+      /\bstands?\s+(?:up\s+for|by)\s+you\b/i,
+      /\bhas\s+your\s+back\b/i,
+      /\bhelps?\s+you\s+(?:up|with|to)\b/i,
+      /\blooks?\s+out\s+for\s+you\b/i,
+      /\btends?\s+to\s+your\s+(?:wounds?|injuries)\b/i
+    ],
+    trust: [
+      /\btrusts?\s+you\b/i,
+      /\bconfides?\s+in\s+you\b/i,
+      /\bopens?\s+up\s+to\s+you\b/i,
+      /\bshares?\s+(?:a\s+)?(?:secret|worry|fear|memory|past|dream)\s+with\s+you\b/i,
+      /\btells?\s+you\s+(?:about\s+)?(?:their|his|her)\s+(?:past|fears?|worries|dreams?|family)\b/i,
+      /\blowers?\s+(?:their|his|her)\s+guard\s+(?:around|with)\s+you\b/i,
+      /\bfeels?\s+(?:safe|comfortable|at\s+ease)\s+(?:around|with)\s+you\b/i,
+      /\bsays?\s+(?:they\s+)?(?:trust|can\s+rely\s+on)\s+you\b/i,
+      /\b(?:relies|depends)\s+on\s+you\b/i
+    ],
+    friendlyTouch: [
+      /\b(?:pats?|claps?)\s+you\s+on\s+the\s+(?:back|shoulder|arm)\b/i,
+      /\bsqueezes?\s+your\s+(?:shoulder|arm)\s+(?:reassuringly|supportively|warmly)\b/i,
+      /\bplaces?\s+a\s+(?:reassuring|comforting|friendly|supportive)\s+hand\s+on\s+your\s+(?:shoulder|arm|back)\b/i,
+      /\bbumps?\s+(?:their|his|her)\s+shoulder\s+(?:against|into)\s+yours\s+(?:playfully|friendly)\b/i,
+      /\b(?:high[-\s]?fives?|fist[-\s]?bumps?)\s+you\b/i,
+      /\bshakes?\s+your\s+hand\s+(?:warmly|firmly|heartily)\b/i,
+      /\bhugs?\s+you\s+(?:warmly|tightly|as\s+a\s+friend|like\s+a\s+friend|in\s+comfort)\b/i,
+      /\bgives?\s+you\s+a\s+(?:friendly|warm|comforting|brief|quick)\s+hug\b/i
+    ]
+  }
+};
+const REL_PATCH_FRIENDSHIP_STRONG_NEGATIVE = {
+  min: 99,
+  strong: [
+    /\b(?:insults|humiliates|threatens)\s+you\b/i,
+    /\b(?:yells|shouts|screams)\s+at\s+you\b/i,
+    /\bscreams\s+angrily\b/i,
+    /\b(?:slaps|hits|punches|attacks)\s+you\b/i,
+    /\btells?\s+you\s+to\s+(?:get\s+lost|leave|go\s+away|fuck\s+off)\b/i,
+    /\b(?:despises|hates|deeply\s+hates)\s+you\b/i,
+    /\bpublicly\s+mocks\s+you\b/i,
+    /\bdeliberately\s+(?:humiliates|hurts)\s+you\b/i,
+    /\bturns\s+against\s+you\b/i,
+    /\bbetrays\s+your\s+trust\b/i,
+    /\bspits\s+at\s+you\b/i,
+    /\bdraws?\s+(?:a\s+)?(?:weapon|sword|dagger|knife)\s+(?:on|against)\s+you\b/i,
+    /\borders?\s+you\s+to\s+leave\b/i,
+    /\bbanishes\s+you\b/i,
+    /\bcuts?\s+ties\s+with\s+you\b/i
+  ], groups: {}
+};
+const REL_PATCH_FRIENDSHIP_NEGATIVE = {
+  min: 2, strong: [], groups: {
+    hostileWords: [
+      /\b(?:snaps|scoffs|sneers)\s+at\s+you\b/i,
+      /\b(?:mocks|scolds|blames|accuses|criticizes)\s+you\b/i,
+      /\b(?:says?|replies|answers?|responds?|retorts?)\s+(?:to\s+you\s+)?(?:coldly|curtly|sharply|bitterly|dismissively|icily|harshly)\b/i,
+      /\bargues?\s+with\s+you\b/i,
+      /\bdisagrees?\s+(?:angrily|sharply|bitterly)\s+with\s+you\b/i,
+      /\bcalls?\s+you\s+(?:a\s+)?(?:fool|idiot|liar|coward|burden)\b/i
+    ],
+    coldBody: [
+      /\b(?:frowns|scowls|glares|grimaces)\s+at\s+you\b/i,
+      /\brolls?\s+(?:their|his|her)\s+eyes\s+at\s+you\b/i,
+      /\bnarrows?\s+(?:their|his|her)\s+eyes\s+at\s+you\b/i,
+      /\b(?:their|his|her)\s+(?:expression|face|gaze)\s+(?:hardens?|turns?\s+cold|darkens?)\b/i,
+      /\blooks?\s+at\s+you\s+(?:coldly|with\s+(?:disdain|contempt|suspicion|distrust|annoyance|irritation))\b/i,
+      /\beyes\s+you\s+(?:suspiciously|warily|coldly)\b/i,
+      /\bcrosses?\s+(?:their|his|her)\s+arms\s+(?:and\s+)?(?:glaring|coldly|defensively)\b/i
+    ],
+    annoyance: [
+      /\b(?:gets?|grows?|becomes?|is)\s+(?:annoyed|irritated|frustrated|impatient|angry|upset|offended)\s+(?:with|at)\s+you\b/i,
+      /\b(?:sighs|huffs)\s+(?:in\s+)?(?:irritation|annoyance|exasperation|frustration)\b/i,
+      /\bclicks?\s+(?:their|his|her)\s+tongue\b/i,
+      /\bloses?\s+(?:their|his|her)\s+patience\s+with\s+you\b/i,
+      /\bresents\s+you\b/i,
+      /\bgets?\s+defensive\s+(?:with|around)\s+you\b/i,
+      /\bseems?\s+(?:tense|uncomfortable|uneasy)\s+(?:around|with|near)\s+you\b/i,
+      /\blooks?\s+uncomfortable\s+around\s+you\b/i,
+      /\bis\s+tense\s+around\s+you\b/i
+    ],
+    dismissal: [
+      /\b(?:dismisses|ignores)\s+you\b/i,
+      /\bbrushes?\s+you\s+off\b/i,
+      /\bignores?\s+(?:what\s+you\s+say|your\s+(?:words|question|presence|attempt))\b/i,
+      /\bwaves?\s+(?:you|your\s+\w+)\s+(?:off|away)\b/i,
+      /\bcuts?\s+you\s+off\b/i,
+      /\btalks?\s+over\s+you\b/i,
+      /\brefuses?\s+to\s+(?:listen\s+to|talk\s+to|speak\s+with|look\s+at)\s+you\b/i,
+      /\bturns?\s+(?:a\s+)?(?:cold\s+)?shoulder\s+(?:to|on)\s+you\b/i
+    ]
+  }
+};
+const REL_PATCH_FRIENDSHIP_DISTANCE = {
+  min: 2, strong: [], groups: {
+    physicalWithdrawal: [
+      /\bpulls?\s+away\s+from\s+you\b/i,
+      /\bsteps?\s+(?:back|away)\s+from\s+you\b/i,
+      /\bmoves?\s+away\s+from\s+you\b/i,
+      /\bbacks?\s+away\s+from\s+you\b/i,
+      /\bturns?\s+(?:away|(?:their|his|her)\s+back)\s+(?:from|on)\s+you\b/i,
+      /\bwalks?\s+away\s+from\s+you\b/i,
+      /\bkeeps?\s+(?:his|her|their)\s+distance\b/i,
+      /\bkeeps?\s+a\s+(?:careful\s+|safe\s+)?distance\s+from\s+you\b/i
+    ],
+    avoidance: [
+      /\bavoids?\s+(?:eye\s+contact\s+with\s+you|looking\s+at\s+you|you|your\s+gaze)\b/i,
+      /\bwon['’]?t\s+meet\s+your\s+(?:eyes|gaze)\b/i,
+      /\blooks?\s+away\s+(?:from\s+you\s+)?(?:coldly|stiffly|quickly)\b/i,
+      /\btries?\s+to\s+(?:avoid|dodge)\s+(?:the\s+(?:subject|topic)|talking\s+about\s+it)\b/i,
+      /\bchanges?\s+the\s+(?:subject|topic)\s+to\s+avoid\b/i,
+      /\bdeflects?\s+your\s+questions?\b/i,
+      /\bgives?\s+(?:short|curt|clipped|one[-\s]word)\s+answers?\b/i
+    ],
+    emotionalClosing: [
+      /\b(?:becomes?|seems?)\s+(?:distant|withdrawn|guarded|closed\s+off)\b/i,
+      /\bshuts?\s+(?:down|you\s+out)\b/i,
+      /\bcloses?\s+(?:themselves?|himself|herself)\s+off\b/i,
+      /\bputs?\s+up\s+(?:a\s+)?(?:wall|barrier)\b/i,
+      /\b(?:grows?|falls?)\s+(?:quiet|silent|cold|distant)\s+(?:around|with|toward|towards)\s+you\b/i,
+      /\bretreats?\s+(?:into\s+(?:silence|themselves|himself|herself)|to\s+(?:their|his|her)\s+(?:room|tent|corner))\b/i,
+      /\b(?:tries?\s+to\s+end|ends?|leaves?)\s+the\s+conversation\b/i,
+      /\bexcuses?\s+(?:themselves?|himself|herself)\s+(?:abruptly|and\s+leaves?)\b/i
+    ]
+  }
+};
+
+const REL_PATCH_ROMANCE_POSITIVE = {
+  min: 2,
+  strong: [
+    /\bconfesses?\s+(?:their|his|her)\s+(?:romantic\s+)?feelings\b/i,
+    /\bconfesses?\s+romantic\s+feelings\b/i,
+    /\badmits?\s+(?:their|his|her)\s+(?:attraction|feelings\s+for\s+you|romantic\s+feelings)\b/i,
+    /\badmits?\s+attraction\s+to\s+you\b/i,
+    /\bhas\s+(?:romantic\s+)?feelings\s+for\s+you\b/i,
+    /\bis\s+attracted\s+to\s+you\b/i,
+    /\bshows?\s+romantic\s+interest\s+in\s+you\b/i,
+    /\b(?:falls|is\s+falling)\s+in\s+love\s+with\s+you\b/i,
+    /\bwants?\s+to\s+be\s+with\s+you\s+romantically\b/i,
+    /\bdesires\s+you\s+romantically\b/i,
+    /\bcalls?\s+you\s+(?:his|her|their)\s+(?:partner|girlfriend|boyfriend|lover|sweetheart)\b/i,
+    /\bwants?\s+to\s+build\s+a\s+future\s+with\s+you\b/i,
+    /\baccepts?\s+your\s+romantic\s+(?:proposal|gift)\b/i,
+    /\btalks?\s+about\s+growing\s+old\s+(?:with|beside)\s+you\b/i,
+    /\bwants?\s+to\s+wake\s+up\s+(?:beside|next\s+to)\s+you\b/i
+  ],
+  groups: {
+    kissAction: [
+      /\b(?:kisses|kissed|kiss)\s+(?:you|me)(?!\s+on\s+the\s+(?:cheek|cheeks|forehead|hand|head))(?:\s+(?:back|again))?\b/i,
+      /\breturns?\s+(?:your\s+|the\s+)?kiss\b/i,
+      /\bdeepens?\s+(?:the\s+)?kiss\b/i,
+      /\bresponds?\s+(?:by\s+|with\s+)?kissing\s+(?:you|me)\b/i,
+      /\bpresses?\s+(?:their|his|her)\s+lips\s+(?:against|to)\s+yours\b/i,
+      /\bmeets?\s+your\s+(?:lips|mouth)\b/i,
+      /\bbrushes?\s+(?:their|his|her)\s+lips\s+against\s+yours\b/i,
+      /\btouches?\s+(?:their|his|her)\s+lips\s+to\s+yours\b/i,
+      /\b(?:seeks?|captures?)\s+your\s+lips\b/i,
+      /\bpulls?\s+you\s+(?:into|closer\s+for)\s+(?:the\s+)?kiss\b/i,
+      /\b(?:keeps?|continues?)\s+kissing\s+(?:you|me)\b/i,
+      /\bdoesn['’]?t\s+let\s+the\s+kiss\s+end\b/i,
+      /\bcan(?:['’]?t|not)\s+resist\s+kissing\s+(?:you|me)\b/i,
+      /\bcouldn['’]?t\s+resist\s+kissing\s+(?:you|me)\b/i,
+      /\bgives?\s+in\s+and\s+kisses?\s+(?:you|me)\b/i,
+      /\b(?:his|her|their)\s+(?:mouth|lips?)\s+(?:crash(?:es)?|press(?:es)?|meets?|moves?)\s+(?:against|onto|to|with)\s+yours\b/i,
+      /\b(?:melts?|melted)\s+(?:into|against)\s+(?:the\s+)?kiss\b/i,
+      /\bleans?\s+into\s+(?:the\s+)?kiss\b/i,
+      /\b(?:yields?|yielded|surrenders?|surrendered)\s+to\s+(?:the\s+|your\s+)?kiss\b/i
+    ],
+    flirtAction: [
+      /\bflirts?\s+(?:back|with\s+you)\b/i,
+      /\bflirtatiously\s+\w+/i,
+      /\breciprocates?\s+(?:your\s+)?flirting\b/i,
+      /\breturns?\s+(?:the\s+)?flirtation\b/i,
+      /\bteases?\s+you\s+(?:playfully|flirtatiously)\b/i,
+      /\bmatches?\s+your\s+flirt(?:ing)?\b/i,
+      /\bmirrors?\s+your\s+teasing\b/i,
+      /\bwinks?\s+at\s+you\b/i,
+      /\ba\s+(?:flirtatious|coy)\s+(?:smile|grin|glance|look|smirk)\b/i,
+      /\bsmiles?\s+(?:coyly|flirtatiously|slyly)\s+at\s+you\b/i,
+      /\bgives?\s+you\s+a\s+(?:coy|flirtatious)\s+(?:smile|look|glance|wink)\b/i
+    ],
+    dateAction: [
+      /\bagrees?\s+to\s+(?:go\s+on\s+)?(?:a\s+)?date\s+with\s+you\b/i,
+      /\baccepts?\s+(?:your\s+)?(?:date\s+)?invitation\b/i,
+      /\basks?\s+you\s+(?:out|on\s+(?:a\s+)?date)\b/i,
+      /\binvites?\s+you\s+(?:out|on\s+(?:a\s+)?date)\b/i,
+      /\b(?:suggests?|proposes?|plans?)\s+(?:a\s+)?date(?:\s+with\s+you)?\b/i,
+      /\binvites?\s+you\s+(?:to|for)\s+(?:a\s+)?romantic\s+(?:dinner|walk|stroll|evening)\b/i
+    ],
+    romanticTouch: [
+      /\bcaresses?\s+your\s+(?:hand|arm|face|cheek|hair|neck)\b/i,
+      /\bstrokes?\s+your\s+(?:cheek|hair|face|arm|back)\b/i,
+      /\bbrushes?\s+(?:your\s+)?hair\s+(?:back|away)\s+from\s+your\s+face\b/i,
+      /\bkisses?\s+your\s+(?:forehead|temple|cheek)\b/i,
+      /\bcups?\s+your\s+(?:cheek|face)\b/i,
+      /\b(?:rests?|presses?)\s+(?:their|his|her)\s+forehead\s+against\s+yours\b/i,
+      /\bnuzzles?\s+(?:against|into)\s+(?:you|your\s+touch)\b/i,
+      /\bholds?\s+you\s+(?:tenderly|gently|lovingly)\b/i,
+      /\bembraces?\s+you\s+(?:gently|tenderly|warmly)\b/i,
+      /\bgives?\s+you\s+a\s+gentle\s+kiss\b/i,
+      /\b(?:their|his|her)\s+lips?\s+(?:find|finds|found)\s+(?:your|the)\s+(?:neck|jaw|cheek|temple)\b/i,
+      /\bruns?\s+(?:their|his|her)\s+fingers?\s+through\s+your\s+hair\b/i,
+      /\btraces?\s+(?:the\s+line\s+of\s+)?your\s+(?:jaw|cheek|face)\b/i,
+      /\bholds?\s+(?:your|the)\s+(?:face|cheek|jaw)\s+(?:gently|tenderly|softly)\b/i,
+      /\b(?:their|his|her)\s+thumb\s+(?:brushes?|brushed)\s+over\s+your\s+(?:knuckles?|hand)\b/i,
+      /\bfingers?\s+(?:tighten|tightened|curl|curled)\s+around\s+yours\b/i,
+      /\bwraps?\s+(?:their|his|her)\s+arms?\s+around\s+you\s+(?:in\s+return|again)\b/i,
+      /\b(?:laces?|intertwines?)\s+(?:their|his|her)\s+fingers\s+(?:with|through)\s+yours\b/i,
+      /\btraces?\s+(?:small\s+)?circles?\s+(?:over|along)\s+your\s+(?:hand|back|arm)\b/i,
+      /\bhugs?\s+you\s+affectionately\b/i,
+      /\baffectionate\s+hug\b/i
+    ],
+    closeness: [
+      /\bstays?\s+close\s+to\s+you\b/i,
+      /\bremains?\s+close\s+to\s+you\b/i,
+      /\bkeeps?\s+you\s+close\b/i,
+      /\bkeeps?\s+(?:his|her|their)\s+(?:body|chest|face)\s+close\s+to\s+yours\b/i,
+      /\bleans?\s+(?:against|into)\s+you(?:r\s+body)?\b/i,
+      /\bsettles?\s+closer\s+(?:to\s+you|beside\s+you)\b/i,
+      /\bdraws?\s+closer\s+to\s+you\b/i,
+      /\bmoves?\s+closer\s+to\s+you\b/i,
+      /\b(?:remains?|stays?)\s+pressed\s+against\s+you\b/i,
+      /\bkeeps?\s+(?:their|his|her)\s+arms\s+around\s+you\b/i,
+      /\b(?:melts?|melted)\s+into\s+your\s+side\b/i,
+      /\b(?:settles?|settled|nestles?|nestled|snuggles?|snuggled)\s+(?:against|beside|into)\s+you\b/i,
+      /\brests?\s+(?:their|his|her)\s+head\s+(?:against|on)\s+your\s+(?:shoulder|chest)\b/i,
+      /\bcloses?\s+the\s+remaining\s+distance\s+between\s+you\b/i,
+      /\bpresses?\s+(?:their|his|her)\s+(?:body|shoulder|chest)\s+(?:close\s+to|against)\s+yours\b/i,
+      /\bpulls?\s+you\s+(?:closer|into\s+(?:their|his|her)\s+(?:arms|embrace))\b/i,
+      /\bwants?\s+to\s+stay\s+(?:like\s+this|close|with\s+you)\b/i,
+      /\byou\s+feel\s+like\s+home\b/i,
+      /\bfeels?\s+like\s+home\s+(?:in|with|beside|next\s+to)\s+(?:your\s+(?:arms|embrace|side)|you)\b/i,
+      /\b(?:belong|belongs|belonging)\b[^.!?]{0,40}\b(?:with\s+you|to\s+you|together)\b/i,
+      /\b(?:grounding|grounded|anchored)\b[^.!?]{0,50}\b(?:with\s+you|by\s+you|your\s+presence)\b/i
+    ],
+    romanticWords: [
+      /\b["']?i\s+love\s+you\s+too["']?\b/i,
+      /\bi\s+adore\s+you\s+too\b/i,
+      /\bi\s+have\s+feelings\s+for\s+you\b/i,
+      /\bi\s+want\s+to\s+be\s+with\s+you\b/i,
+      /\bi['’]?ve\s+(?:fallen|been\s+falling)\s+for\s+you(?:\s+too)?\b/i,
+      /\bi\s+want\s+you\s+too\b/i,
+      /\bi\s+feel\s+it\s+too\b/i,
+      /\bi\s+have\s+the\s+same\s+feelings\b/i,
+      /\bi\s+(?:really\s+)?want\s+this\s+with\s+you\b/i,
+      /\bi\s+want\s+us\b/i,
+      /\bi\s+choose\s+you\b/i,
+      /\bi\s+(?:never\s+)?(?:don['’]?t\s+)?want\s+(?:this|it)\s+to\s+end\b/i,
+      /\bi\s+don['’]?t\s+want\s+to\s+let\s+go\b/i,
+      /\bi\s+want\s+to\s+keep\s+building\s+this\s+with\s+you\b/i,
+      /\bsays?\s+(?:they\s+)?love\s+you\s+too\b/i,
+      /\btells?\s+you\s+(?:they\s+)?love\s+you\b/i,
+      /\breturns?\s+your\s+confession\b/i,
+      /\breciprocates?\s+your\s+feelings\b/i,
+      /\bsays?\s+they\s+feel\s+the\s+same\s+way\b/i,
+      /\bsays?\s+they\s+want\s+to\s+be\s+with\s+you\b/i,
+      /\bsays?\s+they\s+choose\s+you\b/i,
+      /\bsays?\s+they\s+don['’]?t\s+want\s+(?:this|it)\s+to\s+end\b/i,
+      /\bsays?\s+they\s+don['’]?t\s+want\s+to\s+let\s+go\b/i,
+      /\bsays?\s+(?:you|this)\s+feels?\s+like\s+home\b/i
+    ],
+    gift: [
+      /\breturns?\s+the\s+(?:romantic\s+)?gesture\b/i,
+      /\bgives?\s+you\s+(?:a\s+)?romantic\s+gift\b/i,
+      /\bgives?\s+you\s+(?:flowers?|roses?|jewelry)\b/i,
+      /\breturns?\s+the\s+gift\b/i
+    ],
+    timeAlone: [
+      /\bagrees?\s+to\s+spend\s+(?:the\s+)?(?:evening|night|more\s+time|time)\s+(?:alone\s+)?with\s+you\b/i,
+      /\basks?\s+you\s+to\s+stay\b/i,
+      /\bsuggests?\s+spending\s+(?:more\s+)?time\s+(?:together|with\s+you)\b/i,
+      /\bwants?\s+you\s+to\s+stay\s+with\s+(?:them|him|her)\b/i,
+      /\bsuggests?\s+being\s+alone\s+with\s+you\b/i,
+      /\basks?\s+to\s+spend\s+time\s+alone\s+with\s+you\b/i,
+      /\bsuggests?\s+(?:just\s+the\s+two\s+of\s+you|a\s+private\s+evening\s+together)\b/i
+    ],
+    vulnerability: [
+      /\bopens?\s+up\s+to\s+you\s+about\s+(?:their\s+)?feelings\b/i,
+      /\badmits?\s+(?:that\s+)?you\s+matter\s+to\s+(?:him|her|them)\b/i,
+      /\badmits?\s+(?:being|that\s+they\s+are)\s+afraid\s+of\s+losing\s+you\b/i,
+      /\blets?\s+you\s+see\s+(?:a\s+)?vulnerable\s+side\b/i,
+      /\breveals?\s+(?:their|his|her)\s+feelings\s+to\s+you\b/i,
+      /\bopens?\s+(?:their|his|her)\s+heart\s+to\s+you\b/i,
+      /\badmits?\s+(?:they['’]?ve|they\s+have)\s+(?:never|rarely)\s+let\s+anyone\s+this\s+close\b/i,
+      /\badmits?\s+(?:that\s+)?they['’]?re\s+afraid\s+of\s+being\s+vulnerable\s+with\s+you\b/i,
+      /\badmits?\s+they\s+don['’]?t\s+know\s+how\s+to\s+handle\s+their\s+feelings\s+for\s+you\b/i,
+      /\bconfesses?\s+that\s+they\s+feel\s+safe\s+with\s+you\b/i
+    ],
+    commitment: [
+      /\btalks?\s+about\s+(?:a\s+)?future\s+(?:together|with\s+you)\b/i,
+      /\bimagines?\s+(?:a\s+)?future\s+(?:together|with\s+you)\b/i,
+      /\bchooses?\s+(?:you|to\s+stay\s+with\s+you|this\s+closeness)\b/i,
+      /\bwants?\s+you\s+by\s+(?:his|her|their)\s+side\b/i,
+      /\bdoesn['’]?t\s+want\s+to\s+lose\s+you\b/i,
+      /\bpromises?\s+to\s+(?:stay|be)\s+with\s+you\b/i,
+      /\bwants?\s+to\s+keep\s+(?:you|this\s+relationship)\s+in\s+their\s+life\b/i,
+      /\bwants?\s+to\s+(?:keep\s+building|build)\s+this\s+with\s+you\b/i,
+      /\bwants?\s+(?:this|that)\s+with\s+you\b/i,
+      /\bdoesn['’]?t\s+want\s+(?:this|it)\s+to\s+end\b/i,
+      /\bnever\s+wants?\s+(?:this|it)\s+to\s+end\b/i,
+      /\bdoesn['’]?t\s+want\s+to\s+let\s+go\b/i,
+      /\bwants?\s+you\s+in\s+(?:his|her|their)\s+life\b/i
+    ],
+    initiation: [
+      /\binitiates?\s+(?:a\s+)?(?:kiss|romantic\s+moment|romantic\s+contact)\b/i,
+      /\bmakes?\s+the\s+first\s+move\b/i,
+      /\breaches?\s+for\s+your\s+hand\b/i,
+      /\btakes?\s+your\s+hand\s+first\b/i,
+      /\bsuddenly\s+kisses?\s+(?:you|me)\b/i
+    ],
+    acceptance: [
+      /\bagrees?\s+to\s+spend\s+(?:the\s+)?(?:evening|night|time)\s+alone\s+with\s+you\b/i,
+      /\baccepts?\s+your\s+romantic\s+gift\b/i,
+      /\benthusiastically\s+accepts?\s+(?:your\s+)?(?:invitation|proposal|gift)\b/i
+    ]
+  }
+};
+
+const REL_PATCH_ROMANCE_SOFT_POSITIVE = {
+  min: 2, strong: [], groups: {
+    shyness: [
+      /\b(?:blushes|blushing|blushed)\b/i,
+      /\bcheeks\s+(?:flush|redden|turn\s+(?:pink|red))\b/i,
+      /\bturns?\s+(?:red|pink)\b/i,
+      /\b(?:smiles?|looks?\s+away)\s+(?:shyly|bashfully|sheepishly)\b/i,
+      /\bgets?\s+(?:shy|flustered)\s+around\s+you\b/i,
+      /\bseems?\s+(?:shy|flustered|bashful|nervous\s+around\s+you)\b/i,
+      /\b(?:becomes?|gets?)\s+flustered\b/i,
+      /\bstammers?\b/i,
+      /\bfidgets?\s+nervously\s+(?:around|with)\s+you\b/i,
+      /\bheart\s+(?:races|skips|flutters|pounds)\b/i,
+      /\bbutterflies\b/i
+    ],
+    gaze: [
+      /\bholds?\s+your\s+gaze\b/i,
+      /\bholds?\s+eye\s+contact\s+with\s+you\b/i,
+      /\bgaze\s+lingers?\s+on\s+(?:you|your\s+(?:lips|face|eyes))\b/i,
+      /\beyes\s+(?:linger|drift|flick)\s+(?:on|to)\s+your\s+(?:lips|mouth)\b/i,
+      /\blooks?\s+at\s+(?:you|your\s+lips)\s+(?:longingly|tenderly|fondly|admiringly)\b/i,
+      /\bsteals?\s+a\s+glance\s+at\s+you\b/i,
+      /\bcan['’]?t\s+(?:seem\s+to\s+)?(?:look|tear\s+(?:their|his|her)\s+eyes)\s+(?:away|from\s+you)\b/i
+    ],
+    proximity: [
+      /\bleans?\s+closer\s+to\s+you\b/i,
+      /\bsits?\s+closer\s+to\s+you\b/i,
+      /\bedges?\s+closer\b/i,
+      /\bshifts?\s+closer\s+to\s+you\b/i,
+      /\bstays?\s+close\s+to\s+you\b/i,
+      /\bbrushes?\s+against\s+you\b/i,
+      /\b(?:their|his|her)\s+(?:hand|fingers?)\s+(?:brush|brushes|brushed)\s+(?:against\s+)?yours\b/i
+    ],
+    playful: [
+      /\bteases?\s+you\s+flirtatiously\b/i,
+      /\bplayfully\s+teases?\s+you\b/i,
+      /\b(?:seems|looks)\s+charmed\b/i,
+      /\btwirls?\s+(?:a\s+strand\s+of\s+)?(?:their|his|her)\s+hair\b/i
+    ]
+  }
+};
+const REL_PATCH_ROMANCE_REFUSAL = {
+  min: 99,
+  strong: [
+    /\b(?:refuses?|rejects?)\s+(?:your\s+)?kiss\b/i,
+    /\bpulls?\s+away\s+from\s+(?:the\s+)?kiss\b/i,
+    /\bbreaks?\s+(?:the\s+)?kiss\s+and\s+steps?\s+back\b/i,
+    /\bturns?\s+(?:their|his|her)\s+face\s+away\s+from\s+your\s+kiss\b/i,
+    /\b(?:tells?|asks?)\s+you\s+not\s+to\s+(?:kiss|touch)\s+(?:them|him|her)\b/i,
+    /\bstops?\s+you\s+from\s+kissing\s+(?:them|him|her)\b/i,
+    /\brefuses?\s+to\s+kiss\s+(?:you|me)\b/i,
+    /\bpulls?\s+back\s+before\s+(?:the\s+)?kiss\s+can\s+happen\b/i,
+    /\bkeeps?\s+(?:their|his|her)\s+lips\s+closed\s+and\s+turns?\s+away\b/i,
+    /\bpulls?\s+away\s+from\s+your\s+touch\b/i,
+    /\b(?:removes?|pushes?|moves?)\s+your\s+hand\s+away\b/i,
+    /\bremoves?\s+your\s+hand\b/i,
+    /\brejects?\s+your\s+touch\b/i,
+    /\btakes?\s+your\s+hand\s+off\s+(?:them|him|her)\b/i,
+    /\b(?:withdraws?|shifts?)\s+(?:away\s+)?from\s+your\s+touch\b/i,
+    /\bwon['’]?t\s+let\s+you\s+touch\s+(?:them|him|her)\b/i,
+    /\b(?:rebuffs?|rejects?)\s+your\s+flirt(?:ation|ing)\b/i,
+    /\btells?\s+you\s+to\s+stop\s+flirting\b/i,
+    /\bsays?\s+they(?:['’]?re|\s+are)\s+not\s+(?:interested|attracted\s+to\s+you)\b/i,
+    /\bsays?\s+they\s+only\s+see\s+you\s+as\s+a\s+friend\b/i,
+    /\btells?\s+you\s+they(?:['’]?re|\s+are)\s+not\s+attracted\s+to\s+you\b/i,
+    /\b(?:declines?|turns?\s+down)\s+(?:your\s+)?(?:date\s+)?invitation\b/i,
+    /\brefuses?\s+to\s+go\s+on\s+a\s+date\s+with\s+you\b/i,
+    /\bsays?\s+no\s+to\s+(?:the\s+)?date\b/i,
+    /\bdeclines?\s+to\s+go\s+out\s+with\s+you\b/i,
+    /\bturns?\s+down\s+(?:your\s+)?date\b/i,
+    /\bsays?\s+they\s+don['’]?t\s+want\s+to\s+go\s+out\s+with\s+you\b/i,
+    /\brejects?\s+your\s+confession\b/i,
+    /\b(?:doesn['’]?t|does\s+not)\s+feel\s+the\s+same\s+way\b/i,
+    /\bsays?\s+they\s+(?:don['’]?t|do\s+not)\s+(?:feel\s+the\s+same\s+way|love\s+you\s+that\s+way)\b/i,
+    /\btells?\s+you\s+they\s+don['’]?t\s+have\s+feelings\s+for\s+you\b/i,
+    /\bsays?\s+they\s+don['’]?t\s+want\s+to\s+be\s+with\s+you\b/i,
+    /\bsays?\s+they\s+don['’]?t\s+feel\s+romantically\s+about\s+you\b/i,
+    /\bdeclines?\s+to\s+spend\s+(?:the\s+)?(?:evening|night|time)\s+alone\s+with\s+you\b/i,
+    /\brefuses?\s+to\s+be\s+alone\s+with\s+you\b/i,
+    /\bdoesn['’]?t\s+want\s+to\s+be\s+alone\s+with\s+you\b/i,
+    /\bsays?\s+they['’]?d\s+rather\s+not\s+be\s+alone\s+with\s+you\b/i,
+    /\brejects?\s+(?:your\s+advances|you|the\s+(?:romantic\s+)?advance)\b/i,
+    /\bturns?\s+you\s+down\b/i,
+    /\b(?:is|isn['’]?t)\s+not\s+(?:romantically\s+)?interested(?:\s+in\s+you)?\b/i,
+    /\bisn['’]?t\s+(?:romantically\s+)?interested(?:\s+in\s+you)?\b/i,
+    /\bdoes\s+not\s+reciprocate\b/i,
+    /\bdoesn['’]?t\s+reciprocate\b/i,
+    /\b(?:does\s+not|doesn['’]?t)\s+return\s+your\s+feelings\b/i,
+    /\bonly\s+sees\s+you\s+as\s+a\s+friend\b/i,
+    /\brefuses?\s+(?:your\s+romantic\s+advance|the\s+kiss)\b/i
+  ], groups: {}
+};
+const REL_PATCH_ROMANCE_REJECT_REACTION = [
+  /\bpulls?\s+away\b/i,
+  /\bsteps?\s+back\b/i,
+  /\bturns?\s+(?:their|his|her)\s+face\s+away\b/i,
+  /\bflinches\b/i,
+  /\bstiffens\b/i,
+  /\brecoils\b/i,
+  /\bpushes?\s+you\s+(?:away|back)\b/i,
+  /\bshakes?\s+(?:their|his|her)\s+head\s+(?:slowly|firmly)\b/i
+];
+const REL_PATCH_ROMANCE_RECIPROCAL = {
+  kiss: {
+    input: REL_PATCH_ROMANTIC_INPUT.kiss,
+    output: REL_PATCH_ROMANCE_POSITIVE.groups.kissAction.concat([
+      /\bwraps?\s+(?:their|his|her)\s+arms\s+around\s+you\s+(?=.{0,80}(?:kiss|kissing))/i,
+      /\bpresses?\s+(?:their|his|her)\s+(?:body|chest)\s+against\s+yours\s+(?=.{0,80}(?:kiss|kissing))/i,
+      /\b(?:their|his|her)\s+mouth\s+(?:yields?|yielded)\s+to\s+yours\b/i
+    ])
+  },
+  flirt: { input: REL_PATCH_ROMANTIC_INPUT.flirt, output: REL_PATCH_ROMANCE_POSITIVE.groups.flirtAction },
+  date: { input: REL_PATCH_ROMANTIC_INPUT.date, output: REL_PATCH_ROMANCE_POSITIVE.groups.dateAction },
+  touch: {
+    input: REL_PATCH_ROMANTIC_INPUT.touch,
+    output: [
+      /\bhugs?\s+you\s+back\b/i,
+      /\breturns?\s+(?:your\s+)?hug\b/i,
+      /\bembraces?\s+you\b/i,
+      /\bcuddles?\s+(?:closer|with\s+you)\b/i,
+      /\btakes?\s+your\s+hand\b/i,
+      /\bholds?\s+(?:on\s+to\s+)?your\s+hand\b/i,
+      /\bsqueezes?\s+your\s+hand(?:\s+back)?\b/i,
+      /\b(?:squeezes?|squeezed)\s+back\b/i,
+      /\bdoesn['’]?t\s+let\s+go\s+of\s+your\s+hand\b/i,
+      /\b(?:laces?|intertwines?)\s+(?:their|his|her)\s+fingers\s+with\s+yours\b/i,
+      /\bleans?\s+into\s+your\s+touch\b/i,
+      /\b(?:returns?|mirrors?)\s+your\s+(?:touch|caress|stroke|embrace)\b/i,
+      /\bresponds?\s+to\s+your\s+touch\b/i,
+      /\b(?:melts?|melted)\s+into\s+your\s+touch\b/i,
+      /\bnuzzles?\s+(?:into|against)\s+your\s+touch\b/i,
+      /\bwraps?\s+(?:their|his|her)\s+arms\s+around\s+you(?:\s+in\s+return)?\b/i,
+      /\bpresses?\s+(?:their|his|her)\s+(?:body|chest)\s+against\s+yours\b/i,
+      /\bmoves?\s+closer\s+to\s+you\b/i,
+      /\bpulls?\s+you\s+closer\b/i,
+      /\bcaresses?\s+your\s+(?:hand|arm|face|cheek)\b/i
+    ]
+  },
+  gift: {
+    input: REL_PATCH_ROMANTIC_INPUT.gift,
+    output: REL_PATCH_ROMANCE_POSITIVE.groups.gift.concat(REL_PATCH_ROMANCE_POSITIVE.groups.acceptance)
+  },
+  words: {
+    input: REL_PATCH_ROMANTIC_INPUT.words,
+    output: REL_PATCH_ROMANCE_POSITIVE.groups.romanticWords.concat([
+      /\bsays?\s+they\s+want\s+(?:this|that)\s+too\b/i,
+      /\btells?\s+you\s+they\s+want\s+(?:this|that)\s+as\s+well\b/i,
+      /\bsays?\s+they\s+want\s+you\s+in\s+their\s+life\b/i
+    ])
+  },
+  time: { input: REL_PATCH_ROMANTIC_INPUT.time, output: REL_PATCH_ROMANCE_POSITIVE.groups.timeAlone }
+};
+const REL_PATCH_INFIDELITY = {
+  min: 99,
+  strong: [
+    /\b(?:cheats?|cheated|is\s+cheating)\s+on\s+(?:you|(?:their|his|her)\s+(?:partner|wife|husband|girlfriend|boyfriend|spouse|lover))\b/i,
+    /\b(?:has|had|is\s+having)\s+an\s+affair\b/i,
+    /\b(?:is|was)\s+unfaithful\s+to\s+(?:you|(?:their|his|her)\s+(?:partner|wife|husband|girlfriend|boyfriend|spouse))\b/i,
+    /\bbetrays?\s+you\s+(?:with|for|behind\s+your\s+back)\b/i,
+    /\bis\s+(?:secretly\s+)?seeing\s+(?:someone|somebody)\s+else\b/i,
+    /\bkisses?\s+(?:someone|somebody|another\s+(?:man|woman|person))\s+else\b/i
+  ], groups: {}
+};
+
+
 /* ============================================================
    BASIC REL v3
    VERSION: 3.0
@@ -2784,260 +3441,44 @@ const REL = {
         ),
 
       friendshipGeneralPositive:
-        this.hasAny(
-          outText,
-          [
-            /\bthanks you\b/,
-            /\bthanking you\b/,
-            /\bnods appreciatively\b/,
-            /\bnods approvingly\b/,
-            /\bresponds warmly\b/,
-            /\bresponds positively\b/,
-            /\banswers you warmly\b/,
-            /\banswers positively\b/,
-            /\bkeeps the conversation going\b/,
-            /\bcontinues talking with you\b/,
-            /\bcontinues the conversation\b/,
-            /\bkeeps chatting with you\b/,
-            /\bis kind to you\b/,
-            /\bis friendly toward you\b/,
-            /\bis friendly with you\b/,
-            /\bis pleasant toward you\b/,
-            /\bagrees with you\b/,
-            /\bkindly\b/
-          ]
+        !relPatchDetect(outText, REL_PATCH_FRIENDSHIP_STRONG_NEGATIVE) &&
+        (
+          relPatchDetect(outText, REL_PATCH_FRIENDSHIP_POSITIVE) ||
+          relPatchReciprocity(inText, outText, REL_PATCH_FRIENDSHIP_RECIPROCAL)
         ),
 
       friendshipStrongNegative:
-        this.hasAny(
-          outText,
-          [
-            /\binsults you\b/,
-            /\binsults him\b/,
-            /\binsults her\b/,
-            /\bhumiliates you\b/,
-            /\bhumiliates him\b/,
-            /\bhumiliates her\b/,
-            /\bthreatens you\b/,
-            /\bthreatens him\b/,
-            /\bthreatens her\b/,
-            /\byells at you\b/,
-            /\bshouts at you\b/,
-            /\bscreams at you\b/,
-            /\bscreams angrily\b/,
-            /\bslaps you\b/,
-            /\bhits you\b/,
-            /\bpunches you\b/,
-            /\battacks you\b/,
-            /\btells you to get lost\b/,
-            /\btells you to leave\b/,
-            /\btells you to fuck off\b/,
-            /\btells you to go away\b/,
-            /\bdespises you\b/,
-            /\bhates you\b/,
-            /\bdeeply hates you\b/,
-            /\bpublicly mocks you\b/,
-            /\bdeliberately humiliates you\b/,
-            /\bdeliberately hurts you\b/,
-            /\bturns against you\b/
-          ]
-        ),
+        relPatchDetect(outText, REL_PATCH_FRIENDSHIP_STRONG_NEGATIVE),
 
       friendshipNegative:
-        this.hasAny(
-          outText,
-          [
-            /\bgets annoyed with you\b/,
-            /\bgets irritated with you\b/,
-            /\bis annoyed with you\b/,
-            /\bis irritated with you\b/,
-            /\bfrowns at you\b/,
-            /\bscowls at you\b/,
-            /\bgrimaces at you\b/,
-            /\brolls (?:their|his|her) eyes\b/,
-            /\bdismisses you\b/,
-            /\bbrushes you off\b/,
-            /\bignores you\b/,
-            /\bignores what you say\b/,
-            /\blooks uncomfortable around you\b/,
-            /\bseems uncomfortable around you\b/,
-            /\bseems tense around you\b/,
-            /\bis tense around you\b/,
-            /\bargues with you\b/,
-            /\bdisagrees angrily with you\b/,
-            /\bgets defensive with you\b/,
-            /\bresents you\b/
-          ]
-        ),
+        relPatchDetect(outText, REL_PATCH_FRIENDSHIP_NEGATIVE),
 
       friendshipDistance:
-        this.hasAny(
-          outText,
-          [
-            /\bwithdraws from you\b/,
-            /\bwithdraws\b/,
-            /\bpulls away from you\b/,
-            /\bpulls away\b/,
-            /\bmoves away from you\b/,
-            /\bsteps away from you\b/,
-            /\bbacks away from you\b/,
-            /\bavoids eye contact with you\b/,
-            /\bavoids looking at you\b/,
-            /\bavoids you\b/,
-            /\bkeeps his distance\b/,
-            /\bkeeps her distance\b/,
-            /\bkeeps their distance\b/,
-            /\bkeeps a distance from you\b/,
-            /\bshuts down\b/,
-            /\bbecomes distant\b/,
-            /\bseems distant\b/,
-            /\bseems withdrawn\b/,
-            /\bturns away from you\b/,
-            /\bwalks away from you\b/,
-            /\bleaves the conversation\b/,
-            /\btries to end the conversation\b/,
-            /\btries to avoid the subject\b/,
-            /\bchanges the subject to avoid\b/
-          ]
-        ),
+        relPatchDetect(outText, REL_PATCH_FRIENDSHIP_DISTANCE),
 
       romancePositive:
-        this.hasAny(
-          outText,
-          [
-            /\bflirts with you\b/,
-            /\bflirts back\b/,
-            /\bflirtatiously\b/,
-            /\bkisses you\b/,
-            /\bkisses him\b/,
-            /\bkisses her\b/,
-            /\breturns your kiss\b/,
-            /\breturns the kiss\b/,
-            /\basks you out\b/,
-            /\basks you on a date\b/,
-            /\badmits (?:their|his|her) attraction\b/,
-            /\badmits attraction to you\b/,
-            /\badmits (?:their|his|her) feelings for you\b/,
-            /\badmits romantic feelings\b/,
-            /\bconfesses (?:their|his|her) feelings\b/,
-            /\bconfesses romantic feelings\b/,
-            /\bhas feelings for you\b/,
-            /\bis attracted to you\b/,
-            /\bhas romantic feelings for you\b/,
-            /\bshows romantic interest in you\b/,
-            /\bhas romantic interest in you\b/,
-            /\bfalls in love with you\b/,
-            /\bis falling in love with you\b/,
-            /\bdesires you romantically\b/,
-            /\bwants to be with you romantically\b/,
-            /\baffectionate hug\b/,
-            /\bhugs you affectionately\b/,
-            /\binitiates a romantic moment\b/,
-            /\binitiates romantic contact\b/
-          ]
+        !relPatchDetect(outText, REL_PATCH_ROMANCE_REFUSAL) &&
+        (
+          relPatchDetect(outText, REL_PATCH_ROMANCE_POSITIVE) ||
+          relPatchReciprocity(inText, outText, REL_PATCH_ROMANCE_RECIPROCAL)
         ),
 
       romanceSoftPositive:
-        this.hasAny(
-          outText,
-          [
-            /\bblushes\b/,
-            /\bturns red\b/,
-            /\bgets shy around you\b/,
-            /\bsmiles shyly at you\b/,
-            /\blooks away shyly\b/,
-            /\blooks away bashfully\b/,
-            /\bseems shy\b/,
-            /\bseems flustered\b/,
-            /\bbecomes flustered\b/,
-            /\bgets flustered\b/,
-            /\bseems bashful\b/,
-            /\bseems nervous around you\b/,
-            /\bholds your gaze\b/,
-            /\bholds eye contact with you\b/,
-            /\bleans closer to you\b/,
-            /\bmoves closer to you\b/,
-            /\bsits closer to you\b/,
-            /\bstays close to you\b/,
-            /\bteases you flirtatiously\b/,
-            /\bplayfully teases you\b/,
-            /\bseems charmed\b/,
-            /\blooks charmed\b/
-          ]
-        ),
+        !relPatchDetect(outText, REL_PATCH_ROMANCE_REFUSAL) &&
+        relPatchDetect(outText, REL_PATCH_ROMANCE_SOFT_POSITIVE),
 
       romanceNegative:
-        this.hasAny(
-          outText,
-          [
-            /\brejects your advances\b/,
-            /\bturns you down\b/,
-            /\brejects you\b/,
-            /\brejects the romantic advance\b/,
-            /\brejects the advance\b/,
-            /\bis not interested in you\b/,
-            /\bisn't interested in you\b/,
-            /\bis not romantically interested\b/,
-            /\bisn't romantically interested\b/,
-            /\bdoes not feel that way\b/,
-            /\bdoesn't feel that way\b/,
-            /\bdoes not reciprocate\b/,
-            /\bdoesn't reciprocate\b/,
-            /\bdoes not return your feelings\b/,
-            /\bdoesn't return your feelings\b/,
-            /\bonly sees you as a friend\b/,
-            /\basks you to stop\b/,
-            /\btells you to stop\b/,
-            /\brefuses your romantic advance\b/,
-            /\brefuses the kiss\b/,
-            /\bpulls away from the kiss\b/,
-            /\bpulls away from you\b/
-          ]
+        relPatchDetect(outText, REL_PATCH_ROMANCE_REFUSAL) ||
+        (
+          relPatchPlayerRomanticAdvance(inText) &&
+          relPatchFindMatch(outText, REL_PATCH_ROMANCE_REJECT_REACTION, {})
         ),
 
       playerFlirt:
-        this.hasAny(
-          inText,
-          [
-            /\bflirt\b/,
-            /\bflirting\b/,
-            /\bflirted\b/,
-            /\bhit on\b/,
-            /\bmake a pass at\b/,
-            /\bmake a move on\b/,
-            /\bromantically\b/,
-            /\bromantic\b/,
-            /\bkiss\b/,
-            /\bkisses\b/,
-            /\bkissed\b/,
-            /\bask .* out\b/,
-            /\bask .* on a date\b/,
-            /\bask .* for a date\b/,
-            /\btease\b/,
-            /\bteases\b/,
-            /\bteased\b/
-          ]
-        ),
+        relPatchPlayerRomanticAdvance(inText),
 
       infidelity:
-        this.hasAny(
-          outText,
-          [
-            /\bcheats on\b/,
-            /\bcheated on\b/,
-            /\bis cheating on\b/,
-            /\bcheating on\b/,
-            /\bhas an affair\b/,
-            /\bis having an affair\b/,
-            /\bhaving an affair\b/,
-            /\bis unfaithful\b/,
-            /\bunfaithful to\b/,
-            /\bbetrays you\b/,
-            /\bbetrayal\b/,
-            /\bdeceives you\b/,
-            /\bdeception\b/
-          ]
-        )
+        relPatchDetect(outText, REL_PATCH_INFIDELITY)
     };
   },
 
@@ -4779,3 +5220,5 @@ const RELStatus = {
     }
   }
 };
+
+// END OF BASIC REL LIBRARY //
